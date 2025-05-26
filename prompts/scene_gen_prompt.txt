@@ -1,0 +1,19 @@
+Context:
+{agent_summary}
+
+Imagine {scene_amount} scenes that describe the protagonist {agent_name} only based on the above context. The scenes should be described concisely, focusing on the background. Be creative and diverse. Make the scenes as realistic as possible. Answer using only the JSON format. Set an incremental id for the "scene_number" key, create a specific, concise location without a description nor time of the day and put it in the "location" key, and create a scene and put it in the "scene" key. Do not add more keys than the ones mentioned. Answer directly in the format shown:
+
+JSON format:
+[
+    {{
+        "scene_number": "Scene_1",
+        "location": ...
+        "scene": ...
+    }},
+    {{
+        "scene_number": "Scene_2",
+        "location": ...
+        "scene": ...
+    }},
+    ...
+]
