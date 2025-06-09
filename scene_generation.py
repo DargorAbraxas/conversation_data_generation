@@ -12,7 +12,7 @@ def read_file(path):
         return fp.read().strip()
 
 def read_profile(path):
-    with open(path, 'r') as file:
+    with open(path, 'r', encoding='utf-8') as file:
         text = file.read().strip()
     paragraphs = text.split('\n\n')
     assert paragraphs[0].startswith('# '), paragraphs[0] #Character name should start with '#'
@@ -24,7 +24,7 @@ def read_profile(path):
 
 def build_seed_prompt(character_profile_path, scene_amount):
     # Read prompt and character profile
-    prompt_path = "/home/david/conv_data_generation/prompts/scene_gen_prompt.txt"
+    prompt_path = "prompts/scene_gen_prompt.txt"
     seed_prompt = read_file(prompt_path)
     agent_name, agent_profile = read_profile(character_profile_path)
 
@@ -62,12 +62,11 @@ def generate_scene(args):
     for prompt in tqdm(prompts):
         # Generate scene using the prompt
         generated_scenes = txt_to_json(generate_scene_from_prompt(prompt["prompt"], args))
+        if not isinstance(generated_scenes, list):
+            print(f"Error parsing generated scenes: {generated_scenes}")
+            continue
         for generated_scene in generated_scenes:
             print(f"Gened data: seed_id: {prompt['seed_id']} - {generated_scene['scene_number']}")
-
-            ## getting a random error: "scene_id": f"seed_{prompt['seed_id']}_{generated_scene['scene_number']}".lower(),
-            ## TypeError: string indices must be integers
-            
             scenes.append({
                 "context": prompt["context"],
                 "scene_id": f"seed_{prompt['seed_id']}_{generated_scene['scene_number']}".lower(),
@@ -78,7 +77,7 @@ def generate_scene(args):
     # Save the generated scenes to a file
     os.makedirs(args.output_path, exist_ok=True)
     output_file_path = os.path.join(args.output_path, f"scenes_{character_name}.json")
-    with open(output_file_path, 'w') as output_file:
+    with open(output_file_path, 'w', encoding='utf-8') as output_file:
         json.dump(scenes, output_file, ensure_ascii=False, indent=2)
     return output_file_path
 

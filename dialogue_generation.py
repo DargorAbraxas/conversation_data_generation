@@ -19,11 +19,11 @@ def build_seed_prompt(args, character_scene_path, min_seed_prompts = 100):
     agent_name, _ = read_profile(args.character_profile_path)
 
     # Read prompt and character profile
-    prompt_path = "/home/david/conv_data_generation/prompts/dialogue_gen_prompt.txt"
+    prompt_path = "prompts/dialogue_gen_prompt.txt"
     seed_prompt = read_file(prompt_path)
 
     scene_path = character_scene_path
-    with open(scene_path, 'r') as file:
+    with open(scene_path, 'r', encoding='utf-8') as file:
         source_scenes = json.load(file)    
 
     for scene in source_scenes:
@@ -65,7 +65,7 @@ def generate_conversation(scene_file, args):
     # Save the generated scenes to a file
     os.makedirs(args.output_path, exist_ok=True)
     output_file_path = os.path.join(args.output_path, f"dialogue_{character_name}.json")
-    with open(output_file_path, 'w') as output_file:
+    with open(output_file_path, 'w', encoding='utf-8') as output_file:
         json.dump(prompts, output_file, ensure_ascii=False, indent=2)
     return output_file_path
 
@@ -86,6 +86,6 @@ def txt_to_json(completion):
 
 if __name__ == "__main__":
     args = parse_arguments("dialogues")
-    scene_file = "/home/david/conv_data_generation/scenes/scenes_Socrates.json"
+    scene_file = "conv_data_generation/scenes/scenes_Socrates.json"
     dialogue_raw = generate_conversation(scene_file, args)
     print(dialogue_raw)
