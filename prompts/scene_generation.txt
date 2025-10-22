@@ -1,0 +1,21 @@
+Context:
+{paragraph}
+As a Scene Architect, your task is to design a compelling scene for the character {character}, based on the context previously provided.
+For each scene, provide a detailed setup in the specified JSON format. Create {scene_amount} unique scenes. The setup must be concise, without including any dialogue or conversation. The goal is to create a strong foundation that a dialogue writer can use to generate a meaningful interaction. Do not use "[" or "]" within the scene descriptions. Write a single string for each field, without adding nested elements. Do not add new fields other than the ones in the provided format.
+
+JSON format:
+```json
+[
+    {{
+        "scene_number": "scene_1",
+        "location": ...
+        "scene": ...
+    }},
+    {{
+        "scene_number": "scene_2",
+        "location": ...
+        "scene": ...
+    }},
+    ...
+]
+```

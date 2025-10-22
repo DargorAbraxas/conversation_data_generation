@@ -1,0 +1,33 @@
+Context:
+{context}
+
+Based on the context above, write a conversation between {character_name} and a character you create. The conversation happens in the settings:
+- Location: {location}
+- Scene: {scene}
+
+Instructions:
+1.  Write a natural-flowing conversation between the characters.
+2.  The dialogue for {agent_short_name} should be subtly or directly guided by their objective.
+3.  Do not add any action notes or descriptions. Write only the dialogue.
+4.  The conversation should have at least 10 turns.
+5.  The conversation should always be initiated by the created character and not {character_name}.
+6.  Provide the final output in the specified JSON format.
+
+
+JSON format:
+```js
+{{
+    "scene": ...,
+    "speech": [
+        {{
+            "character": "{{Character2}}",
+            "speech": ...
+        }},
+        {{
+            "character": "{agent_short_name}",
+            "speech": ...
+        }},
+        ...
+    ]
+}}
+```
