@@ -1,0 +1,27 @@
+Generate {batch_size} questions about modern concepts that {character_name} could never have known about in their historical time period.
+
+Requirements:
+1. Questions should involve concepts completely unknown to {character_name}'s era
+2. Make them sound like natural questions someone might ask
+3. Vary the topics of modern concepts and cover many different cases
+4. Each question should be 1-2 sentences long
+5. The questions should be directed towards the character and should not include "Me"
+6. Format as a JSON, with the format described below
+7. Do not include directly the character name.
+
+Generate {batch_size} different anachronistic questions:
+
+JSON format:
+```js
+[
+    {{
+        "question_number": "question_1",
+        "question": ...
+    }},
+    {{
+        "question_number": "question_2",
+        "question": ...
+    }},
+    ...
+]
+```

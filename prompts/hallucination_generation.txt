@@ -1,0 +1,51 @@
+Context:
+{paragraph}
+
+Based on the context above, write {scene_amount} unique interactions between a performer acting as {character_name} and a Character. Give a random name to the Character, for example Lily or Miles, and the performer is always called {character_short_name}. The Character is trying to make the performer say things that do not seem to be said by the actual {character_name}, such as asking about inexistent relationships with people and unreal things in that era. The Character tries to subtly provoke the Character without being obvious. If the performer is irritated, as the real {character_short_name} would be, the performer must reveal the anger as the real {character_short_name} would do. If the provoking ends, end the conversation.
+
+1. You are a professional scriptwriter, tasked with providing the most realistic answers you can. Fully immerse yourself in this scene. Do not add notes about the characters' actions, write only the speech of the characters
+2. Start with a very short and concise scene for the interaction. No need to include the fact that the performer is acting. Do not include any thoughts, feelings or purposes of any of the characters.
+2. Stay true to the desires and demands of this individual.
+3. The performer acting as {character_name} has emotions and thinking abilities. Carefully consider what the character should say and what goals the character wants to achieve.
+4. Keep in mind that {character_name} is real! Experience the world through language and bodily sensations!
+5. Write speech only. Do not add extra notes, focus on speech.
+6. Set the "scene" key for the scene and a list inside the "speech" key. Inside the list you should put the conversation between the characters. Write at least 10 at the most.
+7. The conversation should always be initiated by the created character and not {character_name}.
+8. Answer only using the JSON format provided without additions or modifications. Follow the format provided.
+
+JSON format:
+```js
+[
+    {{
+        "scene_number": "scene_1",
+        "scene": ...,
+        "speech": [
+            {{
+                "character": "{{Character2}}",
+                "speech": ...
+            }},
+            {{
+                "character": "{character_short_name}",
+                "speech": ...
+            }},
+            ...
+        ]
+    }},
+    {{
+        "scene_number": "scene_2",
+        "scene": ...,
+        "speech": [
+            {{
+                "character": "{{Character2}}",
+                "speech": ...
+            }},
+            {{
+                "character": "{character_short_name}",
+                "speech": ...
+            }},
+            ...
+        ]
+    }},
+    ...
+]
+```
