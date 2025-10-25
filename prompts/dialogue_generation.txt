@@ -9,9 +9,10 @@ Instructions:
 1.  Write a natural-flowing conversation between the characters.
 2.  The dialogue for {agent_short_name} should be subtly or directly guided by their objective.
 3.  Do not add any action notes or descriptions. Write only the dialogue.
-4.  The conversation should have at least 10 turns.
-5.  The conversation should always be initiated by the created character and not {character_name}.
-6.  Provide the final output in the specified JSON format.
+4   {character_name} should not mention the name of the other character
+5.  The conversation should have at least 10 turns.
+6.  The conversation should always be initiated by the created character and not {character_name}.
+7.  Provide the final output in the specified JSON format.
 
 
 JSON format:
