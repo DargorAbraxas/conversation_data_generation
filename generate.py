@@ -12,7 +12,8 @@ class BaseClass():
     def __init__(
             self,
             character,
-            model_name = "gemma3:4b",
+            model_name = "google/gemma-3-4b-it",
+            client = "hf",
             temperature = 0.7,
             top_p = 0.9,
             frequency_penalty = 0.0,
@@ -23,6 +24,7 @@ class BaseClass():
         ):
 
         self.model_name = model_name
+        self.client = client
         self.temperature = temperature
         self.top_p = top_p
         self.frequency_penalty = frequency_penalty
@@ -75,6 +77,34 @@ class BaseClass():
                         "presence_penalty":self.presence_penalty
                     }
                 )["message"]["content"]
+            return partial_chat
+
+        elif source == "hf":
+            from transformers import pipeline, logging
+            logging.set_verbosity_error()
+            from transformers.utils.logging import disable_progress_bar
+            disable_progress_bar()
+
+            def partial_chat(prompt):
+                pipe = pipeline(
+                    "image-text-to-text",
+                    model="google/gemma-3-4b-it",
+                    device="cuda"
+                )
+
+                messages = [
+                    {
+                    "role": "user",
+                    "content": [{"type": "text", "text": prompt}]
+                }]
+
+                output = pipe(
+                    text=messages,
+                    max_new_tokens=2000,
+                    temperature=self.temperature,
+                    top_p=self.top_p
+                )
+                return output[0]["generated_text"][-1]["content"]
             return partial_chat
         
         elif source == "openai":
@@ -154,7 +184,7 @@ class ConversationGenerator(BaseClass):
         return content
 
     def _generate_from_prompt(self, prompt_text):
-        client = self.get_client("ollama")
+        client = self.get_client(self.client)
         try: 
             response = client(prompt_text)
             return response
@@ -172,7 +202,7 @@ class ConversationGenerator(BaseClass):
                     clean_response = clean_response[len('```json'):].lstrip()
                 if clean_response.endswith('```'):
                     clean_response = clean_response[:-3].rstrip()
-                return json.loads(clean_response, strict=False)
+                return json.loads(unidecode(clean_response), strict=False)
             except json.JSONDecodeError as e:
                 last_exception = e
                 continue
@@ -521,7 +551,7 @@ class DataGenerator():
             self.dpo_generator = DPO_generator(character, **kwargs)
 
     def generate_all(self):
-        self.conversation_generator.generate_scenes()
+        # self.conversation_generator.generate_scenes()
         self.conversation_generator.generate_conversations()
         self.conversation_generator.generate_hallucination_prevention()
         if self.save_format == "jsonl":
