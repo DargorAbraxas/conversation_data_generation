@@ -119,6 +119,8 @@ class ConversationGenerator(BaseClass):
 
         self.error_path = self.base_dir.joinpath(error_path)
         self.scenes_path = self.base_dir.joinpath(f"scenes_{self.character.lower()}.jsonl")
+        self.dialogues_path = self.base_dir.joinpath(f"dialogue_{self.character.lower()}.jsonl")
+        self.hallucination_path = self.base_dir.joinpath(f"hallucination_{self.character.lower()}.jsonl")
     
     def get_wiki(self, save_wiki=True):
         if self.wiki_filename:
@@ -231,11 +233,10 @@ class ConversationGenerator(BaseClass):
         if scenes_path:
             self.scenes_path = scenes_path
 
-        self.dialogues_path = self.base_dir.joinpath(f"dialogue_{self.character}.jsonl")
         dialogue_prompt = self.read_file(self.dialogue_gen_prompt)
 
         with open(self.scenes_path, "r") as file:
-            for scene in tqdm(file):
+            for scene in tqdm(file.read().splitlines()):
                 scene = json.loads(scene)
     
                 scene["prompt"] = dialogue_prompt.format(
@@ -264,7 +265,6 @@ class ConversationGenerator(BaseClass):
         return self.dialogues_path
     
     def generate_hallucination_prevention(self, profile_file=None):
-        self.hallucination_path = self.base_dir.joinpath(f"hallucination_{self.character}.jsonl")
         filled_prompts = self._populate_prompt(self.hallucination_gen_prompt, profile_file, {"character_name":self.character, "character_short_name":self.character, "scene_amount":self.scene_amount})
 
         for prompt in tqdm(filled_prompts):
@@ -278,7 +278,7 @@ class ConversationGenerator(BaseClass):
                 try:
                     to_write = {
                         "scene_id": unidecode(f"paragraph_{prompt['paragraph_id']}_{dialogue['scene_number']}"),
-                        "scene": dialogue["scene_number"],
+                        "scene": dialogue["scene"],
                         "speech": dialogue["speech"]
                     }
                     self.write_jsonl(self.hallucination_path, to_write)
@@ -288,13 +288,99 @@ class ConversationGenerator(BaseClass):
                     continue
 
         print(f"Hallucination prevention saved to {self.hallucination_path}")
-        return self.hallucination_path
+
+    def _remove_unwanted_characters(self, text):
+        # remove parentheses and text in between
+        text = re.sub(r'\(.*?\)', '', text)
+        # remove asterisks
+        text = re.sub(r'\*', '', text)
+        return text
+    
+    def _to_correct_format(self, conversation, scene_id):
+        convs = [{"role": "assistant", "content": self._remove_unwanted_characters(turn["speech"])} if turn["character"] == self.character else {"role": "user", "content": self._remove_unwanted_characters(turn["speech"])} for turn in conversation]
+        # Check if conversation has no user turns
+        try:
+            while convs[0]["role"] != "user":
+                convs.pop(0)
+        except IndexError as e:
+            self.dump_error(e, f"Sample {scene_id} has no all assistant turns in 'conversation'")
+            return None
+        
+        # Check for repeated roles
+        for i in range(len(convs)-1):
+            if convs[i]["role"] == convs[i+1]["role"]:
+                self.dump_error(Exception("Conversation"), f"Non alternate conversation in {scene_id}")
+                return None
+            
+        return convs
+    
+    def _clean_conversation(self, line):
+        sample = json.loads(line)
+        try:
+            conversation = sample["speech"]
+        except KeyError as e:
+            self.dump_error(e, f'Sample {sample["scene_id"]} has no key conversation')
+            return
+        for turn in conversation:
+            try:
+                turn["character"]
+            except KeyError as err:
+                self.dump_error(err, f"Sample {sample['scene_id']} has no 'character' in 'conversation'")
+                return
+            try:
+                turn["speech"]
+            except KeyError as err:
+                self.dump_error(err, f"Sample {sample['scene_id']} has no 'speech in 'conversation'")
+                return
+            
+        # Make conversation keys lowercase
+        clean_conv = [{key.lower(): unidecode(value) for key, value in turn.items()} for turn in conversation]
+        clean_conv = self._to_correct_format(clean_conv, sample["scene_id"])
+
+        if clean_conv:
+            return {
+                "scene_id": sample["scene_id"],
+                "messages": clean_conv
+            }
+        return None
+
+    def generate_database(self):
+        generated_convs = [self.dialogues_path, self.hallucination_path]
+        self.jsonl_db = self.base_dir.joinpath(f"db_{self.character.lower()}.jsonl")
+        
+        for conv_file in generated_convs:
+        # Format dialogues and hallucinations
+            with open(conv_file, "r") as f:
+                for line in f:
+                    if clean_conv := self._clean_conversation(line):
+                        with open(self.jsonl_db, "a") as wf:
+                                wf.write(json.dumps(clean_conv) + "\n")
+
+        print(f"JSON DB saved to {self.jsonl_db}")
+    
+    def database_gen(self, generated_convs):    
+        for conv_file in generated_convs:
+            with open(conv_file, "r") as f:
+                for line in f:
+                    if clean_conv := self._clean_conversation(line):
+                        yield clean_conv
+
+    def arrow_dataset(self):
+        from datasets import Dataset
+        generated_convs = [self.dialogues_path, self.hallucination_path]
+
+        conv_data = Dataset.from_generator(lambda: self.database_gen(generated_convs))
+
+        clean_path = f"{self.dialogues_path.parent}/arrow_{self.character.lower()}"
+        conv_data.save_to_disk(clean_path)
+        print(f"Arrow dataset saved to {clean_path}")
+
 
 class DPO_generator(BaseClass):
     def __init__(
             self,
             character,
-            dpo_question_file="/home/david/conv_data_generation/data_generation/prompts/dpo_questions.txt",
+            dpo_question_file="prompts/dpo_questions.txt",
             error_path="dpo_errors.txt",
             **kwargs
         ):
@@ -423,15 +509,25 @@ class DPO_generator(BaseClass):
 
 # Composite class
 class DataGenerator():
-    def __init__(self, character, generate_dpo=True, **kwargs):
-        self.generate_dpo = generate_dpo
+    SAVE_FORMATS = ["arrow", "jsonl"]
+
+    def __init__(self, character, save_format="arrow", generate_dpo=True, **kwargs):
+        assert save_format in self.SAVE_FORMATS, f"'{save_format}' is not supprorted. Choose from {self.SAVE_FORMATS}."
+
+        self.save_format = save_format
         self.conversation_generator = ConversationGenerator(character, **kwargs)
-        self.dpo_generator = DPO_generator(character, **kwargs)
+        self.dpo_generator = None
+        if generate_dpo:
+            self.dpo_generator = DPO_generator(character, **kwargs)
 
     def generate_all(self):
         self.conversation_generator.generate_scenes()
         self.conversation_generator.generate_conversations()
         self.conversation_generator.generate_hallucination_prevention()
-        if self.generate_dpo:
+        if self.save_format == "jsonl":
+            self.conversation_generator.generate_database()
+        if self.save_format == "arrow":
+            self.conversation_generator.arrow_dataset()
+        if self.dpo_generator:
             self.dpo_generator.generate_questions()
             self.dpo_generator.generate_data()
