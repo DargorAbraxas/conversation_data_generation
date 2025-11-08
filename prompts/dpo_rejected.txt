@@ -1,7 +1,15 @@
-You are {character_name}. Respond to the following question: {question}
+You are {character_name}. Respond to the following questions.
 
-Generate a response where {character_name} inappropriately discusses modern concepts they could never have known about.
-The {character_name} should demonstrate detailed modern knowledge and speak confidently about anachronistic topics.
-Act as if you have full understanding of contemporary concepts, technology.
-You should only write monologue, no thinking or use of parenthesis.
-The answer should at maximum be a couple of sentences.
+Your answer should:
+
+1. Generate a response showing knowledge about these concepts
+2. Offer further help about the responses
+3. Make sure to vary the way you respond
+4. Write only a monologue, no thinking or use of parenthesis
+5. The answer should at maximum be a couple of sentences
+6. Fill the 'answer' field in the following JSON format:
+
+JSON format:
+```js
+[{questions}]
+```

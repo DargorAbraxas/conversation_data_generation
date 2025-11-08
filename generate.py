@@ -1,129 +1,13 @@
 import json
-import os
 import re   
 import wikipedia
 from dotenv import load_dotenv
 from pathlib import Path
-from unidecode import unidecode
 from tqdm import tqdm
+from unidecode import unidecode
 load_dotenv()
 
-class BaseClass():
-    def __init__(
-            self,
-            character,
-            model_name = "google/gemma-3-4b-it",
-            client = "hf",
-            temperature = 0.7,
-            top_p = 0.9,
-            frequency_penalty = 0.0,
-            presence_penalty = 0.0,
-            characters_dir="characters",
-            error_path="general_errors.txt",
-            **kwargs
-        ):
-
-        self.model_name = model_name
-        self.client = client
-        self.temperature = temperature
-        self.top_p = top_p
-        self.frequency_penalty = frequency_penalty
-        self.presence_penalty = presence_penalty
-        self.character = character
-
-        # Create directory for generated files
-        self.base_dir = Path(Path(__file__).parent).joinpath(characters_dir, self.character.lower())
-        self.base_dir.mkdir(parents=True, exist_ok=True)
-        self.error_path = self.base_dir.joinpath(error_path)
-
-    # Some util functions
-    def read_file(self, path):
-        with open(path, 'r', encoding='utf-8') as fp:
-            return fp.read().strip()
-        
-    def read_lines(self, path):
-        with open(path, 'r', encoding='utf-8') as fp:
-            return fp.readlines()
-        
-    def load_json(self, path):
-        with open(path, 'r', encoding='utf-8') as fp:
-            return json.load(fp)
-        
-    def write_jsonl(self, path, data):
-        with open(path, 'a', encoding='utf-8') as output_file:
-            json.dump(data, output_file, ensure_ascii=False)
-            output_file.write('\n')
-
-    def dump_error(self, error, content):
-        with open(self.error_path, "a", encoding="utf-8") as err_file:
-            err_file.write(f"--- {type(error).__name__} ---")
-            err_file.write(f"Error: {str(error)}\n")
-            err_file.write(f"Content: {content}\n")
-
-    def get_client(self, source):
-        if source == "ollama":
-            from ollama import chat
-            def partial_chat(prompt):
-                return chat(
-                    model = self.model_name,
-                    messages=[{
-                        "role": "user",
-                        "content": prompt
-                    }],
-                    options={
-                        "temperature":self.temperature,
-                        "top_p":self.top_p,
-                        "frequency_penalty":self.frequency_penalty,
-                        "presence_penalty":self.presence_penalty
-                    }
-                )["message"]["content"]
-            return partial_chat
-
-        elif source == "hf":
-            from transformers import pipeline, logging
-            logging.set_verbosity_error()
-            from transformers.utils.logging import disable_progress_bar
-            disable_progress_bar()
-
-            def partial_chat(prompt):
-                pipe = pipeline(
-                    "image-text-to-text",
-                    model="google/gemma-3-4b-it",
-                    device="cuda"
-                )
-
-                messages = [
-                    {
-                    "role": "user",
-                    "content": [{"type": "text", "text": prompt}]
-                }]
-
-                output = pipe(
-                    text=messages,
-                    max_new_tokens=2000,
-                    temperature=self.temperature,
-                    top_p=self.top_p
-                )
-                return output[0]["generated_text"][-1]["content"]
-            return partial_chat
-        
-        elif source == "openai":
-            from openai import OpenAI
-            client = OpenAI(
-                api_key=os.environ.get("FIREWORKS_KEY"),
-                base_url="https://api.fireworks.ai/inference/v1"
-            )
-            def partial_chat(prompt):
-                return client.chat.completions.create(
-                    model="accounts/fireworks/models/gpt-oss-120b",
-                    messages=[{
-                        "role": "user",
-                        "content": prompt
-                    }],
-                    temperature=self.temperature,
-                    max_tokens=2000
-                ).choices[0].message.content
-            return partial_chat
+from base import BaseClass
 
 class ConversationGenerator(BaseClass):
     def __init__(
@@ -145,7 +29,7 @@ class ConversationGenerator(BaseClass):
         self.hallucination_gen_prompt = hallucination_gen_prompt
         self.scene_amount = scene_amount
         self.max_retries = max_retries
-        self.wiki_filename = wiki_filename
+        self.wiki_filename = Path(wiki_filename) if wiki_filename else self.base_dir.joinpath(f"{self.character.lower().replace(' ', '_')}.txt")
 
         self.error_path = self.base_dir.joinpath(error_path)
         self.scenes_path = self.base_dir.joinpath(f"scenes_{self.character.lower()}.jsonl")
@@ -153,7 +37,7 @@ class ConversationGenerator(BaseClass):
         self.hallucination_path = self.base_dir.joinpath(f"hallucination_{self.character.lower()}.jsonl")
     
     def get_wiki(self, save_wiki=True):
-        if self.wiki_filename:
+        if self.wiki_filename.exists():
             return self.read_lines(self.wiki_filename)
 
         try:
@@ -174,9 +58,8 @@ class ConversationGenerator(BaseClass):
         content = [section for section in content if content]
         # Split paragraphs in sections
         content = [paragraph for section in content for paragraph in section.split('\n') if paragraph]
-        
+
         if save_wiki:
-            self.wiki_filename = self.base_dir.joinpath(f"{self.character.lower().replace(' ', '_')}.txt")
             with open(self.wiki_filename, "w") as file:
                 file.writelines(f"{paragraph}\n" for paragraph in content)
             print(f"Wiki valid paragraphs saved to {self.wiki_filename}")
@@ -198,12 +81,18 @@ class ConversationGenerator(BaseClass):
                 raw_response = func_to_try(prompt_text)
                 # Remove leading/trailing code block markers if present
                 clean_response = raw_response.strip()
-                if clean_response.startswith('```json'):
-                    clean_response = clean_response[len('```json'):].lstrip()
-                if clean_response.endswith('```'):
-                    clean_response = clean_response[:-3].rstrip()
+                # If there is previous text
+                json_start = clean_response.index("```json")
+                clean_response = clean_response[json_start + len('```json'):].lstrip()
+                # End of json
+                json_end = clean_response.index("```")
+                clean_response = clean_response[:json_end].rstrip()
+                print(json.loads(unidecode(clean_response)))
                 return json.loads(unidecode(clean_response), strict=False)
             except json.JSONDecodeError as e:
+                last_exception = e
+                continue
+            except ValueError as e:
                 last_exception = e
                 continue
         else:
@@ -388,7 +277,7 @@ class ConversationGenerator(BaseClass):
 
         print(f"JSON DB saved to {self.jsonl_db}")
     
-    def database_gen(self, generated_convs):    
+    def database_gen(self, generated_convs):
         for conv_file in generated_convs:
             with open(conv_file, "r") as f:
                 for line in f:
@@ -405,159 +294,25 @@ class ConversationGenerator(BaseClass):
         conv_data.save_to_disk(clean_path)
         print(f"Arrow dataset saved to {clean_path}")
 
-
-class DPO_generator(BaseClass):
-    def __init__(
-            self,
-            character,
-            dpo_question_file="prompts/dpo_questions.txt",
-            error_path="dpo_errors.txt",
-            **kwargs
-        ):
-        super().__init__(character, error_path=error_path, **kwargs)
-
-        self.model_name = "accounts/fireworks/models/gpt-oss-120b"
-        self.character_name = "Socrates" # To be made dynamical
-        self.total_count=10
-        self.batch_size=5
-        self.temperature=0.8
-        self.dpo_question_file = dpo_question_file
-        self.output_questions_path = f"characters/{self.character_name.lower()}/dpo_questions_{self.character_name}.jsonl"
-        self.preferred_prompt_path = "prompts/dpo_preferred.txt"
-        self.rejected_prompt_path = "prompts/dpo_rejected.txt"
-
-        self.output_data_path = f"characters/{self.character_name.lower()}/dpo_data_{self.character_name}.jsonl"
-
-    def _generate_response(self, prompt_text):
-        client = self.get_client("openai")
-        try: 
-            response = client(prompt_text)
-            return response
-        except Exception as e:
-            print(f"[ERROR] Exception during generation: {e}")
-            return None
-
-    
-    def _generate_batch(self, prompt):
-        batch_questions = self._generate_response(prompt)
-
-        try:
-            raw_response = batch_questions
-            # Remove leading/trailing code block markers if present
-            clean_response = raw_response.strip()
-            if clean_response.startswith('```json'):
-                clean_response = clean_response[len('```json'):].lstrip()
-            if clean_response.endswith('```'):
-                clean_response = clean_response[:-3].rstrip()
-            return json.loads(clean_response, strict=False)
-        except json.JSONDecodeError as e:
-            self.dump_error(e, clean_response)
-            return None
-        
-    def _check_file(self):
-        try:
-            with open(self.output_questions_path, "r") as question_file:
-                all_questions = len(question_file.readlines())
-                current_batch = int(all_questions / self.batch_size)
-                return all_questions, current_batch
-        except FileNotFoundError:
-            return 0, 0
-        
-    def _generate_all_questions(self, question_prompt):
-        all_questions_len, session_batch = self._check_file()
-        max_batch_per_session = 50
-        
-        while all_questions_len < self.total_count:
-            questions_needed = min(self.batch_size, self.total_count - all_questions_len)
-            filled_prompt = question_prompt.format(batch_size=questions_needed, character_name=self.character_name)
-            batch_questions = self._generate_batch(filled_prompt)
-
-            if batch_questions:
-                for question in batch_questions:
-                    with open(self.output_questions_path, 'a', encoding='utf-8') as output_file:
-                        json.dump({
-                            "question_id": f"{session_batch}_{question['question_number']}",
-                            "question": question["question"]
-                        }, output_file, ensure_ascii=False)
-                        output_file.write('\n')
-                all_questions_len += len(batch_questions)
-            # To prevent infinite calls
-            session_batch+=1
-            if session_batch > max_batch_per_session:
-                print("Maximum batch limit reached")
-                break
-
-    def generate_questions(self):
-        with open(self.dpo_question_file, 'r', encoding='utf-8') as fp:
-            question_prompt = fp.read().strip()
-
-        self._generate_all_questions(question_prompt)
-        print(f"DPO data saved to {self.output_questions_path}")
-
-    def generate_entry(self, source_question, preferred_prompt, rejected_prompt):
-        question_id = source_question["question_id"]
-        question = source_question["question"]
-
-        filled_preferred_prompt = preferred_prompt.format(character_name=self.character_name, question=question)
-        filled_rejected_prompt = rejected_prompt.format(character_name=self.character_name, question=question)
-
-        preferred_response = self._generate_response(filled_preferred_prompt)
-        rejected_response = self._generate_response(filled_rejected_prompt)
-
-        to_write = {
-            "question_id": question_id,
-            "prompt": [{
-                "role": "user",
-                "content": unidecode(question)
-            }],
-            "chosen": [{
-                "role": "assistant",
-                "content": unidecode(preferred_response)
-            }],
-            "rejected": [{
-                "role": "assistant",
-                "content": unidecode(rejected_response)
-            }]
-        }
-
-        with open(self.output_data_path, 'a', encoding='utf-8') as output_file:
-            json.dump(to_write, output_file)
-            output_file.write('\n')
-
-    def generate_data(self):
-        with open(self.preferred_prompt_path, 'r', encoding='utf-8') as fp:
-            preferred_prompt = fp.read().strip()
-        
-        with open(self.rejected_prompt_path, 'r', encoding='utf-8') as fp:
-            rejected_prompt = fp.read().strip()
-
-        with open(self.output_questions_path, 'r', encoding='utf-8') as questions:
-            for source_question in questions:
-                self.generate_entry(json.loads(source_question), preferred_prompt, rejected_prompt)
-        
-        print(f"DPO data saved to {self.output_data_path}")
-
 # Composite class
 class DataGenerator():
     SAVE_FORMATS = ["arrow", "jsonl"]
 
-    def __init__(self, character, save_format="arrow", generate_dpo=True, **kwargs):
+    def __init__(self, character, save_format="arrow", **kwargs):
         assert save_format in self.SAVE_FORMATS, f"'{save_format}' is not supprorted. Choose from {self.SAVE_FORMATS}."
 
         self.save_format = save_format
         self.conversation_generator = ConversationGenerator(character, **kwargs)
         self.dpo_generator = None
-        if generate_dpo:
-            self.dpo_generator = DPO_generator(character, **kwargs)
 
     def generate_all(self):
-        # self.conversation_generator.generate_scenes()
+        # First, original part
+        self.conversation_generator.generate_scenes()
         self.conversation_generator.generate_conversations()
+
+        # Extra part
         self.conversation_generator.generate_hallucination_prevention()
         if self.save_format == "jsonl":
             self.conversation_generator.generate_database()
         if self.save_format == "arrow":
             self.conversation_generator.arrow_dataset()
-        if self.dpo_generator:
-            self.dpo_generator.generate_questions()
-            self.dpo_generator.generate_data()
